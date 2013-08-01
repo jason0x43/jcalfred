@@ -11,8 +11,8 @@ from sys import stdout
 from xml.sax.saxutils import escape
 
 
-PREFERENCES = plistlib.readPlist('info.plist')
-BUNDLE_ID = PREFERENCES['bundleid']
+BUNDLE_INFO = plistlib.readPlist('info.plist')
+BUNDLE_ID = BUNDLE_INFO['bundleid']
 CACHE_DIR = os.path.expanduser('~/Library/Caches'
                                '/com.runningwithcrayons.Alfred-2'
                                '/Workflow Data/{}'.format(BUNDLE_ID))
@@ -20,13 +20,7 @@ DATA_DIR = os.path.expanduser('~/Library/Application Support/Alfred 2'
                               '/Workflow Data/{}'.format(BUNDLE_ID))
 LINE = unichr(0x2500) * 20
 
-_log_file = os.path.join(CACHE_DIR, 'debug.log')
-_format = '[%(asctime)s] %(levelname)s: %(name)s: %(message)s'
-_handler = handlers.TimedRotatingFileHandler(_log_file, when='H', interval=1,
-                                             backupCount=1)
-_handler.setFormatter(logging.Formatter(_format))
-logging.getLogger().addHandler(_handler)
-
+LOG_FORMAT = '[%(asctime)s] %(levelname)s: %(name)s: %(message)s'
 LOG = logging.getLogger(__name__)
 
 
@@ -102,6 +96,12 @@ class AlfredWorkflow(object):
 
         self.log_level = conf.get('loglevel', 'INFO')
         logging.getLogger().setLevel(getattr(logging, self.log_level))
+
+        log_file = os.path.join(self.cache_dir, 'debug.log')
+        handler = handlers.TimedRotatingFileHandler(
+            log_file, when='H', interval=1, backupCount=1)
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        logging.getLogger().addHandler(handler)
 
     def save_config(self):
         config = {'loglevel': self.log_level}
