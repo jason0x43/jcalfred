@@ -4,6 +4,7 @@
 import logging
 import plistlib
 import os.path
+import json
 import uuid
 from logging import handlers
 from sys import stdout
@@ -17,18 +18,14 @@ CACHE_DIR = os.path.expanduser('~/Library/Caches'
                                '/Workflow Data/{}'.format(BUNDLE_ID))
 DATA_DIR = os.path.expanduser('~/Library/Application Support/Alfred 2'
                               '/Workflow Data/{}'.format(BUNDLE_ID))
-MAX_RESULTS = 9
+LINE = unichr(0x2500) * 20
 
-
-log_file = os.path.join(CACHE_DIR, 'debug.log')
-
+_log_file = os.path.join(CACHE_DIR, 'debug.log')
 _format = '[%(asctime)s] %(levelname)s: %(name)s: %(message)s'
-_root_log = logging.getLogger()
-_handler = handlers.TimedRotatingFileHandler(log_file, when='H', interval=1,
+_handler = handlers.TimedRotatingFileHandler(_log_file, when='H', interval=1,
                                              backupCount=1)
 _handler.setFormatter(logging.Formatter(_format))
-_root_log.setLevel(logging.DEBUG)
-_root_log.addHandler(_handler)
+logging.getLogger().addHandler(_handler)
 
 LOG = logging.getLogger(__name__)
 
@@ -86,16 +83,31 @@ class Item(object):
         return ''.join(xml)
 
     def __str__(self):
-        return '{{Item: title="{}"}}'.format(self.title.encode('utf-8'))
+        return '{{Item: title="{}", valid={}, arg="{}"}}'.format(
+            self.title.encode('utf-8'), self.valid, self.arg)
 
     def __unicode__(self):
-        return u'{{Item: title="{}"}}'.format(self.title)
+        return unicode(str(self))
 
     def __repr__(self):
         return self.__str__()
 
 
 class AlfredWorkflow(object):
+    def __init__(self):
+        conf = {}
+        if os.path.exists('config.json'):
+            with open('config.json', 'rt') as cfile:
+                conf = json.load(cfile)
+
+        self.log_level = conf.get('loglevel', 'INFO')
+        logging.getLogger().setLevel(getattr(logging, self.log_level))
+
+    def save_config(self):
+        config = {'loglevel': self.log_level}
+        with open('config.json', 'wt') as cfile:
+            json.dump(config, cfile)
+
     @property
     def bundle_id(self):
         return BUNDLE_ID
@@ -233,7 +245,7 @@ def get_from_user(title, prompt, hidden=False, value=None, extra_buttons=None):
     return (button, value)
 
 
-def get_confirmation(title, prompt, default="No"):
+def get_confirmation(title, prompt, default='No'):
     '''Display a confirmation dialog'''
     script = '''
         on run argv
