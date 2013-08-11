@@ -42,3 +42,5 @@ may also specify an arbitrary comment string when setting a password.
 
 The `get_item` function returns a `dict` with the keys "service", "account",
 "password", and "comment".
+
+[alfred]: http://www.alfredapp.com
