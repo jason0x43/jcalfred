@@ -13,11 +13,10 @@ import sys
 from subprocess import check_output, call, CalledProcessError, STDOUT
 
 
-SERVICE_NAME = 'jalf'
+SERVICE_NAME = 'jcalfred'
 
 
 TAG_NAMES = {
-    '0x00000007': 'name',
     'svce': 'service',
     'acct': 'account',
     'icmt': 'comment',
@@ -30,7 +29,8 @@ if sys.platform != 'darwin':
 
 def _parse_keychain_item(lines):
     '''Parse a keychain item.'''
-    item = {}
+    item = {'service': None, 'account': None, 'comment': None,
+            'password': None}
     for line in lines:
         if line.startswith('password: '):
             ipass = line[10:].strip().strip('"')
