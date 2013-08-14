@@ -78,7 +78,7 @@ def set_item(account, password, comment=None, service=SERVICE_NAME):
     comment    (optional) text to be stored with password
     service    (optional) the service the password is for
     '''
-    label = '{}.{}'.format(service, account)
+    label = '%s.%s' % (service, account)
     cmd = ['security', 'add-generic-password', '-w', password, '-a', account,
            '-s', service, '-U', '-l', label]
     if comment:

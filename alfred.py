@@ -15,9 +15,9 @@ BUNDLE_INFO = plistlib.readPlist('info.plist')
 BUNDLE_ID = BUNDLE_INFO['bundleid']
 CACHE_DIR = os.path.expanduser('~/Library/Caches'
                                '/com.runningwithcrayons.Alfred-2'
-                               '/Workflow Data/{}'.format(BUNDLE_ID))
+                               '/Workflow Data/%s' % BUNDLE_ID)
 DATA_DIR = os.path.expanduser('~/Library/Application Support/Alfred 2'
-                              '/Workflow Data/{}'.format(BUNDLE_ID))
+                              '/Workflow Data/%s' % BUNDLE_ID)
 LINE = unichr(0x2500) * 20
 
 LOG_FORMAT = '[%(asctime)s] %(levelname)s: %(name)s: %(message)s'
@@ -28,7 +28,7 @@ def _check_dir_writeable(path):
     if not os.path.isdir(path):
         os.mkdir(path)
         if not os.access(path, os.W_OK):
-            raise IOError('No write access to {}'.format(path))
+            raise IOError('No write access to %s' % path)
 
 
 class Item(object):
@@ -46,9 +46,9 @@ class Item(object):
         attrs = []
 
         if self.uid:
-            attrs.append(u'uid="{}-{}"'.format(BUNDLE_ID, self.uid))
+            attrs.append(u'uid="%s-%s"' % (BUNDLE_ID, self.uid))
         else:
-            attrs.append(u'uid="{}"'.format(uuid.uuid4()))
+            attrs.append(u'uid="%s"' % uuid.uuid4())
 
         if self.valid:
             attrs.append('valid="yes"')
@@ -56,28 +56,28 @@ class Item(object):
             attrs.append('valid="no"')
 
         if self.arg is not None:
-            attrs.append(u'arg="{}"'.format(self.arg))
+            attrs.append(u'arg="%s"' % self.arg)
 
-        xml = [u'<item {}>'.format(u' '.join(attrs))]
+        xml = [u'<item %s>' % (u' '.join(attrs))]
 
         title = escape(self.title)
-        xml.append(u'<title>{}</title>'.format(title))
+        xml.append(u'<title>%s</title>' % title)
 
         if self.subtitle is not None:
             subtitle = escape(self.subtitle)
-            xml.append(u'<subtitle>{}</subtitle>'.format(subtitle))
+            xml.append(u'<subtitle>%s</subtitle>' % subtitle)
         if self.icon is not None:
             if isinstance(self.icon, dict):
-                xml.append(u'<icon type="{}">{}</icon>'.format(
+                xml.append(u'<icon type="%s">%s</icon>' % (
                     self.icon['type'], self.icon['path']))
             else:
-                xml.append(u'<icon>{}</icon>'.format(self.icon))
+                xml.append(u'<icon>%s</icon>' % self.icon)
 
         xml.append(u'</item>')
         return ''.join(xml)
 
     def __str__(self):
-        return '{{Item: title="{}", valid={}, arg="{}"}}'.format(
+        return '{{Item: title="%s", valid=%s, arg="%s"}}' % (
             self.title.encode('utf-8'), self.valid, self.arg)
 
     def __unicode__(self):
@@ -135,29 +135,29 @@ class AlfredWorkflow(object):
 
     def tell(self, name, query=''):
         '''Tell something.'''
-        LOG.debug('tell({}, {})'.format(name, query))
+        LOG.debug('tell(%s, %s)', name, query)
         try:
-            cmd = 'tell_{}'.format(name)
+            cmd = 'tell_%s' % name
             if getattr(self, cmd):
                 items = getattr(self, cmd)(query)
             else:
-                items = [Item('Invalid action "{}"'.format(name))]
+                items = [Item('Invalid action "%s"' % name)]
         except Exception, e:
             LOG.exception('Error telling')
-            items = [Item('Error: {}'.format(e))]
+            items = [Item('Error: %s' % e)]
         self.puts(to_xml(items))
 
     def do(self, name, query=''):
         '''Do something.'''
         try:
-            cmd = 'do_{}'.format(name)
+            cmd = 'do_%s' % name
             if getattr(self, cmd):
                 getattr(self, cmd)(query)
             else:
-                self.puts('Invalid command "{}"'.format(name))
+                self.puts('Invalid command "%s"' % name)
         except Exception, e:
             LOG.exception('Error showing')
-            self.puts('Error: {}'.format(e))
+            self.puts('Error: %s' % e)
 
 
 def fuzzy_match(test, text):
@@ -221,7 +221,7 @@ def get_from_user(title, prompt, hidden=False, value=None, extra_buttons=None):
             buttons = extra_buttons + buttons
         else:
             buttons.insert(0, extra_buttons)
-    buttons = '{{{}}}'.format(', '.join(['"{}"'.format(b) for b in buttons]))
+    buttons = '{%s}' % ', '.join(['"%s"' % b for b in buttons])
 
     hidden = 'with hidden answer' if hidden else ''
 
