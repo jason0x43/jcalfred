@@ -113,7 +113,7 @@ class AlfredWorkflow(object):
     def save_config(self):
         config = {'loglevel': self.log_level}
         with open('config.json', 'wt') as cfile:
-            json.dump(config, cfile)
+            json.dump(config, cfile, indent=2)
 
     @property
     def bundle_id(self):
