@@ -13,7 +13,7 @@ import sys
 from subprocess import check_output, call, CalledProcessError, STDOUT
 
 
-SERVICE_NAME = 'jcalfred'
+DEFAULT_SERVICE = 'jcalfred'
 
 
 TAG_NAMES = {
@@ -27,77 +27,85 @@ if sys.platform != 'darwin':
     raise Exception('This library only works on Mac OS X')
 
 
-def _parse_keychain_item(lines):
-    '''Parse a keychain item.'''
-    item = {'service': None, 'account': None, 'comment': None,
-            'password': None}
-    for line in lines:
-        if line.startswith('password: '):
-            ipass = line[10:].strip().strip('"')
-            item['password'] = ipass
-        elif line.startswith(' '):
-            line = line.strip()
-            if line.startswith('0'):
-                tag, sep, val = line.partition(' ')
-                vtype, sep, val = val.partition('=')
-            else:
-                tag, sep, val = line.partition('<')
-                tag = tag.strip('"')
-                vtype, sep, val = val.partition('=')
+class Keychain(object):
+    def __init__(self, service=DEFAULT_SERVICE):
+        self._service = service
 
-            if val == '<NULL>':
-                continue
+    @property
+    def service(self):
+        return self._service
 
-            if tag in TAG_NAMES:
-                item[TAG_NAMES[tag]] = val.strip('"')
-    return item
+    def _parse_keychain_item(self, lines):
+        '''Parse a keychain item.'''
+        item = {'service': None, 'account': None, 'comment': None,
+                'password': None}
+        for line in lines:
+            if line.startswith('password: '):
+                ipass = line[10:].strip().strip('"')
+                item['password'] = ipass
+            elif line.startswith(' '):
+                line = line.strip()
+                if line.startswith('0'):
+                    tag, sep, val = line.partition(' ')
+                    vtype, sep, val = val.partition('=')
+                else:
+                    tag, sep, val = line.partition('<')
+                    tag = tag.strip('"')
+                    vtype, sep, val = val.partition('=')
 
+                if val == '<NULL>':
+                    continue
 
-def get_item(account, service=SERVICE_NAME):
-    '''Retrieve a keychain item.
-
-    account   the account password to get
-    service   (optional) service name for the password
-    '''
-    cmd = ['security', 'find-generic-password', '-g', '-a', account, '-s',
-           service]
-
-    try:
-        out = check_output(cmd, stderr=STDOUT)
-        item = _parse_keychain_item(out.split('\n'))
+                if tag in TAG_NAMES:
+                    item[TAG_NAMES[tag]] = val.strip('"')
         return item
-    except CalledProcessError:
-        return None
 
+    def get_password(self, account):
+        '''Retrieve a password entry.
 
-def set_item(account, password, comment=None, service=SERVICE_NAME):
-    '''Add or update a keychain item.
+        account   the account password to get
+        service   (optional) service name for the password
+        '''
+        cmd = ['security', 'find-generic-password', '-g', '-a', account, '-s',
+               self._service]
 
-    account    the name of the account the password is for (e.g., plugin name)
-    password   the password value
-    comment    (optional) text to be stored with password
-    service    (optional) the service the password is for
-    '''
-    label = '%s.%s' % (service, account)
-    cmd = ['security', 'add-generic-password', '-w', password, '-a', account,
-           '-s', service, '-U', '-l', label]
-    if comment:
-        cmd += ['-j', comment]
+        try:
+            out = check_output(cmd, stderr=STDOUT)
+            item = self._parse_keychain_item(out.split('\n'))
+            return item
+        except CalledProcessError:
+            return None
 
-    try:
-        call(cmd)
-    except CalledProcessError:
-        return None
+    def set_password(self, account, password, comment=None):
+        '''Add or update a password entry.
 
+        account    the name of the account the password is for (e.g., plugin
+                   name)
+        password   the password value
+        comment    (optional) text to be stored with password
+        service    (optional) the service the password is for
+        '''
+        label = '%s.%s' % (self._service, account)
+        cmd = ['security', 'add-generic-password', '-w', password, '-a',
+               account, '-s', self._service, '-U', '-l', label]
+        if comment:
+            cmd += ['-j', comment]
 
-def del_item(account, service=SERVICE_NAME):
-    '''Delete a keychain item.
+        try:
+            call(cmd)
+        except CalledProcessError:
+            return None
 
-    account    the name of the account the password is for (e.g., plugin name)
-    service    (optional) the service the password is for
-    '''
-    cmd = ['security', 'delete-generic-password', '-a', account, '-s', service]
-    check_output(cmd, stderr=STDOUT)
+    def del_password(self, account):
+        '''Delete a password entry.
+
+        account    the name of the account the password is for (e.g., plugin
+                   name)
+        service    (optional) the service the password is for
+        '''
+        cmd = ['security', 'delete-generic-password', '-a', account, '-s',
+               self._service]
+        check_output(cmd, stderr=STDOUT)
 
 
 if __name__ == '__main__':
@@ -108,11 +116,13 @@ if __name__ == '__main__':
     parser.add_argument('account')
     args = parser.parse_args()
 
+    keychain = Keychain()
+
     if args.command == 'get':
-        print get_item(args.account)
+        print keychain.get_password(args.account)
     elif args.command == 'set':
         from getpass import getpass
         passwd = getpass('Password: ')
-        set_item(args.account, passwd)
+        keychain.set_password(args.account, passwd)
     elif args.command == 'del':
-        del_item(args.account)
+        keychain.del_password(args.account)
