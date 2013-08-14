@@ -95,13 +95,20 @@ class AlfredWorkflow(object):
                 conf = json.load(cfile)
 
         self.log_level = conf.get('loglevel', 'INFO')
-        logging.getLogger().setLevel(getattr(logging, self.log_level))
-
         log_file = os.path.join(self.cache_dir, 'debug.log')
         handler = handlers.TimedRotatingFileHandler(
             log_file, when='H', interval=1, backupCount=1)
         handler.setFormatter(logging.Formatter(LOG_FORMAT))
         logging.getLogger().addHandler(handler)
+
+    @property
+    def log_level(self):
+        return self._log_level
+
+    @log_level.setter
+    def log_level(self, level):
+        self._log_level = level
+        logging.getLogger().setLevel(getattr(logging, level))
 
     def save_config(self):
         config = {'loglevel': self.log_level}
