@@ -80,20 +80,57 @@ class Item(object):
         return self.__str__()
 
 
-class AlfredWorkflow(object):
-    def __init__(self):
-        self._bundle_info = plistlib.readPlist('info.plist')
-        self._bundle_id = self._bundle_info['bundleid']
-        self._cache_dir = os.path.expanduser(
+class WorkflowInfo(object):
+    def __init__(self, path=None):
+        if not path:
+            path = os.getcwd()
+
+        bundle_info = plistlib.readPlist(os.path.join(path, 'info.plist'))
+
+        self.path = path
+        self.bundle_id = bundle_info['bundleid']
+        self.cache_dir = os.path.expanduser(
             '~/Library/Caches/com.runningwithcrayons.Alfred-2'
-            '/Workflow Data/%s' % self._bundle_id)
-        self._data_dir = os.path.expanduser(
+            '/Workflow Data/%s' % self.bundle_id)
+        self.data_dir = os.path.expanduser(
             '~/Library/Application Support/Alfred 2/Workflow Data/%s' %
-            self._bundle_id)
+            self.bundle_id)
+        self.icon = os.path.join(path, 'icon.png')
+        self.name = bundle_info['name']
+        self.config_file = os.path.join(path, 'config.json')
+        self.update_file = os.path.join(path, 'update.json')
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def config(self):
+        if not hasattr(self, '_config'):
+            if os.path.exists(self.config_file):
+                with open(self.config_file) as cf:
+                    self._config = json.load(cf)
+            else:
+                self._config = None
+        return self._config
+
+    @property
+    def update_info(self):
+        if not hasattr(self, '_update_info'):
+            if os.path.exists(self.update_file):
+                with open(self.update_file) as uf:
+                    self._update_info = json.load(uf)
+            else:
+                self._update_info = None
+        return self._update_info
+
+
+class Workflow(object):
+    def __init__(self):
+        self._info = WorkflowInfo()
 
         conf = {}
-        if os.path.exists('config.json'):
-            with open('config.json', 'rt') as cfile:
+        if os.path.exists(self._info.config_file):
+            with open(self._info.config_file, 'rt') as cfile:
                 conf = json.load(cfile)
 
         self.log_level = conf.get('loglevel', 'INFO')
@@ -114,26 +151,22 @@ class AlfredWorkflow(object):
 
     def save_config(self):
         config = {'loglevel': self.log_level}
-        with open('config.json', 'wt') as cfile:
+        with open(self._info.config_file, 'wt') as cfile:
             json.dump(config, cfile, indent=2)
 
     @property
-    def bundle_info(self):
-        return self._bundle_info
-
-    @property
     def bundle_id(self):
-        return self._bundle_id
+        return self._info.bundle_id
 
     @property
     def data_dir(self):
-        _check_dir_writeable(self._data_dir)
-        return self._data_dir
+        _check_dir_writeable(self._info.data_dir)
+        return self._info.data_dir
 
     @property
     def cache_dir(self):
-        _check_dir_writeable(self._cache_dir)
-        return self._cache_dir
+        _check_dir_writeable(self._info.cache_dir)
+        return self._info.cache_dir
 
     def puts(self, msg):
         '''Output a string.'''
