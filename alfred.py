@@ -85,10 +85,9 @@ class WorkflowInfo(object):
         if not path:
             path = os.getcwd()
 
-        bundle_info = plistlib.readPlist(os.path.join(path, 'info.plist'))
-
+        self.bundle = plistlib.readPlist(os.path.join(path, 'info.plist'))
         self.path = path
-        self.bundle_id = bundle_info['bundleid']
+        self.bundle_id = self.bundle['bundleid']
         self.cache_dir = os.path.expanduser(
             '~/Library/Caches/com.runningwithcrayons.Alfred-2'
             '/Workflow Data/%s' % self.bundle_id)
@@ -96,7 +95,8 @@ class WorkflowInfo(object):
             '~/Library/Application Support/Alfred 2/Workflow Data/%s' %
             self.bundle_id)
         self.icon = os.path.join(path, 'icon.png')
-        self.name = bundle_info['name']
+        self.name = self.bundle['name']
+        self.readme = self.bundle['readme']
         self.config_file = os.path.join(path, 'config.json')
         self.update_file = os.path.join(path, 'update.json')
 
@@ -153,6 +153,10 @@ class Workflow(object):
         config = {'loglevel': self.log_level}
         with open(self._info.config_file, 'wt') as cfile:
             json.dump(config, cfile, indent=2)
+
+    @property
+    def info(self):
+        return self._info
 
     @property
     def bundle_id(self):
