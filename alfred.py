@@ -174,9 +174,9 @@ class Workflow(object):
     def __init__(self):
         self._info = WorkflowInfo()
         self.log_level = self._info.config.get('loglevel', 'INFO')
-        log_file = os.path.join(self.cache_dir, 'debug.log')
+        self.log_file = os.path.join(self.cache_dir, 'debug.log')
         handler = handlers.TimedRotatingFileHandler(
-            log_file, when='H', interval=1, backupCount=1)
+            self.log_file, when='H', interval=1, backupCount=1)
         handler.setFormatter(logging.Formatter(LOG_FORMAT))
         logging.getLogger().addHandler(handler)
 
