@@ -163,12 +163,10 @@ class WorkflowInfo(object):
 
     @property
     def data_dir(self):
-        _check_dir_writeable(self._data_dir)
         return self._data_dir
 
     @property
     def cache_dir(self):
-        _check_dir_writeable(self._cache_dir)
         return self._cache_dir
 
 
@@ -205,10 +203,12 @@ class Workflow(object):
 
     @property
     def data_dir(self):
+        _check_dir_writeable(self._info.data_dir)
         return self._info.data_dir
 
     @property
     def cache_dir(self):
+        _check_dir_writeable(self._info.cache_dir)
         return self._info.cache_dir
 
     def puts(self, msg):
