@@ -17,18 +17,42 @@ task. The AlfredWorkflow class has archetypal `do()` and `tell()` methods that
 will call the proper specialized method in a sublass and display any raised
 exceptions in a reasonable way.
 
-A very simple example workflow might look something like:
+A very simple example workflow for getting and setting the temperature for a
+Nest thermostat might look something like:
 
-    import jcalfred
+    from jcalfred import Workflow, Item
 
-    class Workflow(jcalfred.AlfredWorkflow):
+    class MyWorkflow(Workflow):
         def tell_temperature(self, query):
             temp = get_nest_temperature()
-            return [jcalfred.Item('Temperature: {}&deg;F'.format(temp)')]
+            return [Item('Temperature: {}&deg;F'.format(temp)')]
 
         def do_temperature(self, temp):
             set_nest_temperature(temp)
             self.puts('Set temperature to {}&deg;F'.format(temp)')
+
+It would be structured in the workflow editor something like:
+
+    +---------------+         +------------+        +-------------------+
+    |   nest temp   |         |   python   |        |                   |
+    |               |---------|            |--------|                   |
+    | Script Filter |         | Run Script |        | Post Notification |
+    +---------------+         +------------+        +-------------------+
+
+The Script Filter block would call `tell_temperature` with:
+
+    from my_workflow import MyWorkflow
+    MyWorkflow().tell('temp')
+
+Similarly, the Run Script block would call `do_temperature` with:
+
+    from my_workflow import MyWorkflow
+    MyWorkflow().do('temp', '{query}')
+
+The `Workflow` class handles converting the `Items` returned by
+`tell_temperature` into an XML doc for Alfred. It will also catch any
+exceptions thrown in the do or tell methods and return them in the proper
+format (as XML or text) for them to show up to the user.
 
 keychain.py
 -----------

@@ -80,6 +80,35 @@ class Item(object):
         return self.__str__()
 
 
+class LiveConfig(object):
+    def __init__(self, path, default_data=None):
+        self._data = {}
+        self._path = path
+        if os.path.exists(path):
+            with open(path, 'rt') as cfile:
+                self._data = json.load(cfile)
+        elif default_data:
+            self._data = default_data
+            self._save()
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __setitem__(self, key, value):
+        self._data[key] = value
+        self._save()
+
+    def get(self, key, default):
+        return self._data.get(key, default)
+
+    def _save(self):
+        with open(self._path, 'wt') as cfile:
+            json.dump(self._data, cfile, indent=2)
+
+
 class WorkflowInfo(object):
     def __init__(self, path=None):
         if not path:
@@ -88,29 +117,38 @@ class WorkflowInfo(object):
         self.bundle = plistlib.readPlist(os.path.join(path, 'info.plist'))
         self.path = path
         self.bundle_id = self.bundle['bundleid']
-        self.cache_dir = os.path.expanduser(
+
+        self._cache_dir = os.path.expanduser(
             '~/Library/Caches/com.runningwithcrayons.Alfred-2'
             '/Workflow Data/%s' % self.bundle_id)
-        self.data_dir = os.path.expanduser(
+        self._data_dir = os.path.expanduser(
             '~/Library/Application Support/Alfred 2/Workflow Data/%s' %
             self.bundle_id)
+
         self.icon = os.path.join(path, 'icon.png')
         self.name = self.bundle['name']
         self.readme = self.bundle['readme']
-        self.config_file = os.path.join(path, 'config.json')
+        self.config_file = os.path.join(self.data_dir, 'config.json')
         self.update_file = os.path.join(path, 'update.json')
+
+        default_cfg = None
+
+        # if we don't already have a config file and an internal config file
+        # exists, load it and use it as initial data (essentially, port any old
+        # config files over to the new proper location)
+        if not os.path.exists(self.config_file):
+            init_config = os.path.join(path, 'config.json')
+            if os.path.exists(init_config):
+                with open(init_config, 'rt') as icf:
+                    default_cfg = json.load(icf)
+
+        self._config = LiveConfig(self.config_file, default_cfg)
 
     def __str__(self):
         return self.name
 
     @property
     def config(self):
-        if not hasattr(self, '_config'):
-            if os.path.exists(self.config_file):
-                with open(self.config_file) as cf:
-                    self._config = json.load(cf)
-            else:
-                self._config = None
         return self._config
 
     @property
@@ -123,17 +161,21 @@ class WorkflowInfo(object):
                 self._update_info = None
         return self._update_info
 
+    @property
+    def data_dir(self):
+        _check_dir_writeable(self._data_dir)
+        return self._data_dir
+
+    @property
+    def cache_dir(self):
+        _check_dir_writeable(self._cache_dir)
+        return self._cache_dir
+
 
 class Workflow(object):
     def __init__(self):
         self._info = WorkflowInfo()
-
-        conf = {}
-        if os.path.exists(self._info.config_file):
-            with open(self._info.config_file, 'rt') as cfile:
-                conf = json.load(cfile)
-
-        self.log_level = conf.get('loglevel', 'INFO')
+        self.log_level = self._info.config.get('loglevel', 'INFO')
         log_file = os.path.join(self.cache_dir, 'debug.log')
         handler = handlers.TimedRotatingFileHandler(
             log_file, when='H', interval=1, backupCount=1)
@@ -141,18 +183,17 @@ class Workflow(object):
         logging.getLogger().addHandler(handler)
 
     @property
+    def config(self):
+        return self._info.config
+
+    @property
     def log_level(self):
-        return self._log_level
+        return self.config.get('loglevel', 'INFO')
 
     @log_level.setter
     def log_level(self, level):
-        self._log_level = level
+        self.config['loglevel'] = level
         logging.getLogger().setLevel(getattr(logging, level))
-
-    def save_config(self):
-        config = {'loglevel': self.log_level}
-        with open(self._info.config_file, 'wt') as cfile:
-            json.dump(config, cfile, indent=2)
 
     @property
     def info(self):
@@ -164,12 +205,10 @@ class Workflow(object):
 
     @property
     def data_dir(self):
-        _check_dir_writeable(self._info.data_dir)
         return self._info.data_dir
 
     @property
     def cache_dir(self):
-        _check_dir_writeable(self._info.cache_dir)
         return self._info.cache_dir
 
     def puts(self, msg):
