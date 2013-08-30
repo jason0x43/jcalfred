@@ -130,19 +130,7 @@ class WorkflowInfo(object):
         self.readme = self.bundle['readme']
         self.config_file = os.path.join(self.data_dir, 'config.json')
         self.update_file = os.path.join(path, 'update.json')
-
-        default_cfg = None
-
-        # if we don't already have a config file and an internal config file
-        # exists, load it and use it as initial data (essentially, port any old
-        # config files over to the new proper location)
-        if not os.path.exists(self.config_file):
-            init_config = os.path.join(path, 'config.json')
-            if os.path.exists(init_config):
-                with open(init_config, 'rt') as icf:
-                    default_cfg = json.load(icf)
-
-        self._config = LiveConfig(self.config_file, default_cfg)
+        self._config = LiveConfig(self.config_file)
 
     def __str__(self):
         return self.name
