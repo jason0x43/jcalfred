@@ -161,12 +161,16 @@ class WorkflowInfo(object):
 class Workflow(object):
     def __init__(self):
         self._info = WorkflowInfo()
-        self.log_level = self._info.config.get('loglevel', 'INFO')
+
+        _check_dir_writeable(self.data_dir)
+        _check_dir_writeable(self.cache_dir)
+
         self.log_file = os.path.join(self.cache_dir, 'debug.log')
         handler = handlers.TimedRotatingFileHandler(
             self.log_file, when='H', interval=1, backupCount=1)
         handler.setFormatter(logging.Formatter(LOG_FORMAT))
         logging.getLogger().addHandler(handler)
+        logging.getLogger().setLevel(getattr(logging, self.log_level))
 
     @property
     def config(self):
@@ -191,12 +195,10 @@ class Workflow(object):
 
     @property
     def data_dir(self):
-        _check_dir_writeable(self._info.data_dir)
         return self._info.data_dir
 
     @property
     def cache_dir(self):
-        _check_dir_writeable(self._info.cache_dir)
         return self._info.cache_dir
 
     def puts(self, msg):
