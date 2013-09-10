@@ -33,15 +33,23 @@ class Item(object):
         self.uid = uid
         self.valid = valid
         self.arg = arg
-        self.random_uid = random_uid
+
+        if not uid and random_uid:
+            self.uid = str(uuid.uuid4())
+
+    @classmethod
+    def from_dict(cls, obj):
+        return Item(title=obj['title'],
+                    subtitle=obj['subtitle'],
+                    icon=obj['icon'],
+                    uid=obj['uid'],
+                    valid=obj['valid'],
+                    arg=obj['arg'])
 
     def to_xml(self):
         attrs = []
 
-        if self.random_uid:
-            attrs.append(u'uid="%s"' % uuid.uuid4())
-        elif self.uid:
-            attrs.append(u'uid="%s"' % self.uid)
+        attrs.append(u'uid="%s"' % self.uid)
 
         if self.valid:
             attrs.append('valid="yes"')
@@ -69,6 +77,16 @@ class Item(object):
         xml.append(u'</item>')
         return ''.join(xml)
 
+    def to_dict(self):
+        return {
+            'title': self.title,
+            'subtitle': self.subtitle,
+            'icon': self.icon,
+            'uid': self.uid,
+            'valid': self.valid,
+            'arg': self.arg
+        }
+
     def __str__(self):
         return '{{Item: title="%s", valid=%s, arg="%s"}}' % (
             self.title.encode('utf-8'), self.valid, self.arg)
@@ -80,28 +98,41 @@ class Item(object):
         return self.__str__()
 
 
-class LiveConfig(object):
-    def __init__(self, path, default_data=None):
+class JsonFile(object):
+    def __init__(self, path, default_data=None, ignore_errors=False):
         self._data = {}
         self._path = path
+
         if os.path.exists(path):
-            with open(path, 'rt') as cfile:
-                self._data = json.load(cfile)
+            try:
+                with open(path, 'rt') as cfile:
+                    self._data = json.load(cfile)
+            except ValueError:
+                if ignore_errors:
+                    LOG.warn('ignoring corrupt JsonFile %s', path)
+                    self._data = {}
+                else:
+                    LOG.warn('corrupt JsonFile %s', path)
+                    raise
         elif default_data:
             self._data = default_data
             self._save()
 
+    def __contains__(self, key):
+        return key in self._data
+
     def __getitem__(self, key):
         return self._data[key]
 
-    def __contains__(self, key):
-        return key in self._data
+    def __delitem__(self, key):
+        del self._data[key]
+        self._save()
 
     def __setitem__(self, key, value):
         self._data[key] = value
         self._save()
 
-    def get(self, key, default):
+    def get(self, key, default=None):
         return self._data.get(key, default)
 
     def _save(self):
@@ -130,7 +161,7 @@ class WorkflowInfo(object):
         self.readme = self.bundle['readme']
         self.config_file = os.path.join(self.data_dir, 'config.json')
         self.update_file = os.path.join(path, 'update.json')
-        self._config = LiveConfig(self.config_file)
+        self._config = JsonFile(self.config_file)
 
     def __str__(self):
         return self.name
