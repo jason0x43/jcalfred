@@ -406,12 +406,16 @@ class Workflow(object):
             items = [Item('Error: %s' % e)]
         self.puts(self.to_xml(items))
 
-    def do(self, name, query=''):
+    def do(self, name, query='', modifier=None):
         '''Do something.'''
         try:
             cmd = 'do_%s' % name
-            if getattr(self, cmd):
-                getattr(self, cmd)(query)
+            doer = getattr(self, cmd)
+            if doer:
+                if modifier:
+                    doer(query, modifier)
+                else:
+                    doer(query)
             else:
                 self.puts('Invalid command "%s"' % name)
         except Exception, e:
