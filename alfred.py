@@ -196,9 +196,9 @@ class Workflow(object):
         _check_dir_writeable(self.data_dir)
         _check_dir_writeable(self.cache_dir)
 
-        self.log_file = os.path.join(self.cache_dir, 'debug.log')
+        self._log_file = os.path.join(self.cache_dir, 'debug.log')
         handler = handlers.TimedRotatingFileHandler(
-            self.log_file, when='H', interval=1, backupCount=1)
+            self._log_file, when='H', interval=1, backupCount=1)
         handler.setFormatter(logging.Formatter(LOG_FORMAT))
         logging.getLogger().addHandler(handler)
         logging.getLogger().setLevel(getattr(logging, self.log_level))
@@ -210,6 +210,10 @@ class Workflow(object):
     @property
     def log_level(self):
         return self.config.get('loglevel', 'INFO')
+
+    @property
+    def log_file(self):
+        return self._log_file
 
     @log_level.setter
     def log_level(self, level):
@@ -278,6 +282,11 @@ class Workflow(object):
                   stderr=PIPE)
         stdout, stderr = p.communicate(script)
         return stdout.decode('utf-8'), stderr.decode('utf-8')
+
+    def show_log(self):
+        '''Open the debug log in the system default viewer'''
+        from subprocess import call
+        call(['open', self.log_file])
 
     def get_from_user(self, title, prompt, hidden=False, value=None,
                       extra_buttons=None):
