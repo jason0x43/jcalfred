@@ -118,6 +118,10 @@ class JsonFile(object):
             self._data = default_data
             self._save()
 
+    @property
+    def path(self):
+        return self._path
+
     def __contains__(self, key):
         return key in self._data
 
