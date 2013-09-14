@@ -240,19 +240,31 @@ class Workflow(object):
         '''Output a string.'''
         stdout.write(msg.encode('utf-8'))
 
-    def fuzzy_match(self, test, text):
+    def fuzzy_match(self, test, text, words=False, ordered=True):
         '''Return true if the given text fuzzy matches the test'''
         start = 0
         test = test.lower()
         text = text.lower()
-        for c in test:
-            i = text.find(c, start)
-            if i == -1:
-                return False
-            start = i + 1
+
+        if words:
+            tokens = test.split()
+        else:
+            tokens = list(test)
+
+        if ordered:
+            for c in tokens:
+                i = text.find(c, start)
+                if i == -1:
+                    return False
+                start = i + 1
+        else:
+            for c in tokens:
+                if c not in text:
+                    return False
         return True
 
-    def fuzzy_match_list(self, test, items, key=None):
+    def fuzzy_match_list(self, test, items, key=None, words=False,
+                         ordered=True):
         '''Return the subset of items that fuzzy match a string [test]'''
         matches = []
         for item in items:
@@ -261,7 +273,7 @@ class Workflow(object):
             else:
                 istr = str(item)
 
-            if self.fuzzy_match(test, istr):
+            if self.fuzzy_match(test, istr, words=words, ordered=ordered):
                 matches.append(item)
         return matches
 
