@@ -6,12 +6,12 @@ import plistlib
 import os.path
 import json
 import uuid
+from .jsonfile import JsonFile
 from logging import handlers
 from sys import stdout
 from xml.sax.saxutils import escape
 
 
-LINE = unichr(0x2500) * 20
 LOG_FORMAT = '[%(asctime)s] %(levelname)s: %(name)s: %(message)s'
 LOG = logging.getLogger(__name__)
 
@@ -24,6 +24,8 @@ def _check_dir_writeable(path):
 
 
 class Item(object):
+    LINE = unichr(0x2500) * 20
+
     '''An item in an Alfred feedback XML message'''
     def __init__(self, title, subtitle=None, icon=None, valid=False, arg=None,
                  uid=None, random_uid=True):
@@ -98,52 +100,6 @@ class Item(object):
         return self.__str__()
 
 
-class JsonFile(object):
-    def __init__(self, path, default_data=None, ignore_errors=False):
-        self._data = {}
-        self._path = path
-
-        if os.path.exists(path):
-            try:
-                with open(path, 'rt') as cfile:
-                    self._data = json.load(cfile)
-            except ValueError:
-                if ignore_errors:
-                    LOG.warn('ignoring corrupt JsonFile %s', path)
-                    self._data = {}
-                else:
-                    LOG.warn('corrupt JsonFile %s', path)
-                    raise
-        elif default_data:
-            self._data = default_data
-            self._save()
-
-    @property
-    def path(self):
-        return self._path
-
-    def __contains__(self, key):
-        return key in self._data
-
-    def __getitem__(self, key):
-        return self._data[key]
-
-    def __delitem__(self, key):
-        del self._data[key]
-        self._save()
-
-    def __setitem__(self, key, value):
-        self._data[key] = value
-        self._save()
-
-    def get(self, key, default=None):
-        return self._data.get(key, default)
-
-    def _save(self):
-        with open(self._path, 'wt') as cfile:
-            json.dump(self._data, cfile, indent=2)
-
-
 class WorkflowInfo(object):
     def __init__(self, path=None):
         if not path:
@@ -212,8 +168,12 @@ class Workflow(object):
         return self._info.config
 
     @property
+    def config_file(self):
+        return self._info.config_file
+
+    @property
     def log_level(self):
-        return self.config.get('loglevel', 'INFO')
+        return self.config.get('log_level', 'INFO')
 
     @property
     def log_file(self):
