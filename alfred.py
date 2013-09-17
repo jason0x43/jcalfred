@@ -6,14 +6,14 @@ import plistlib
 import os.path
 import json
 import uuid
-from .jsonfile import JsonFile
+from jsonfile import JsonFile
 from logging import handlers
-from sys import stdout
-from xml.sax.saxutils import escape
+from xml.etree.ElementTree import Element, SubElement, tostring
 
 
 LOG_FORMAT = '[%(asctime)s] %(levelname)s: %(name)s: %(message)s'
 LOG = logging.getLogger(__name__)
+BASE_DIR = os.path.dirname(__file__)
 
 
 def _check_dir_writeable(path):
@@ -49,35 +49,35 @@ class Item(object):
                     arg=obj['arg'])
 
     def to_xml(self):
-        attrs = []
+        item = Element('item')
 
-        attrs.append(u'uid="%s"' % self.uid)
+        item.set('uid', self.uid)
 
         if self.valid:
-            attrs.append('valid="yes"')
+            item.set('valid', 'yes')
         else:
-            attrs.append('valid="no"')
+            item.set('valid', 'no')
 
         if self.arg is not None:
-            attrs.append(u'arg="%s"' % self.arg)
+            item.set('arg', self.arg)
 
-        xml = [u'<item %s>' % (u' '.join(attrs))]
-
-        title = escape(self.title)
-        xml.append(u'<title>%s</title>' % title)
+        title = SubElement(item, 'title')
+        title.text = self.title
 
         if self.subtitle is not None:
-            subtitle = escape(self.subtitle)
-            xml.append(u'<subtitle>%s</subtitle>' % subtitle)
-        if self.icon is not None:
-            if isinstance(self.icon, dict):
-                xml.append(u'<icon type="%s">%s</icon>' % (
-                    self.icon['type'], self.icon['path']))
-            else:
-                xml.append(u'<icon>%s</icon>' % self.icon)
+            subtitle = SubElement(item, 'subtitle')
+            subtitle.text = self.subtitle
 
-        xml.append(u'</item>')
-        return ''.join(xml)
+        if self.icon is not None:
+            icon = SubElement(item, 'icon')
+
+            if isinstance(self.icon, dict):
+                icon.set('type', self.icon['type'])
+                icon.text = self.icon['path']
+            else:
+                icon.text = self.icon
+
+        return tostring(item)
 
     def to_dict(self):
         return {
@@ -202,6 +202,7 @@ class Workflow(object):
 
     def puts(self, msg):
         '''Output a string.'''
+        from sys import stdout
         stdout.write(msg.encode('utf-8'))
 
     def fuzzy_match(self, test, text, words=False, ordered=True):
@@ -311,6 +312,30 @@ class Workflow(object):
         button, sep, value = response.partition('|')
         return (button, value)
 
+    @classmethod
+    def get_selection_from_user(cls, title, prompt, choices, default=None):
+        '''Popup a dialog to let a user select a value from a list of choices.
+
+        The main use for this function is to request information that you don't
+        want showing up in Alfred's command history.
+        '''
+        if default is None:
+            default = ''
+
+        if not isinstance(choices, (tuple, list)):
+            choices = [choices]
+        choices = '{{"{0}"}}'.format('","'.join(choices))
+
+        with open(os.path.join(BASE_DIR, 'get_selection.scpt')) as sfile:
+            script = sfile.read().format(default=default, prompt=prompt,
+                                         title=title, choices=choices)
+        from subprocess import Popen, PIPE
+        p = Popen(['osascript', '-'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = p.communicate(script)
+        response = stdout.decode('utf-8').rstrip('\n')
+        button, sep, value = response.partition('|')
+        return (button, value)
+
     def get_confirmation(self, title, prompt, default='No'):
         '''Display a confirmation dialog'''
         script = '''
@@ -389,4 +414,4 @@ class Workflow(object):
 
 if __name__ == '__main__':
     from sys import argv
-    globals()[argv[1]](*argv[2:])
+    getattr(Workflow, argv[1])(*argv[2:])
