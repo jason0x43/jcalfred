@@ -61,6 +61,15 @@ class JsonFile(object):
         self._data[key] = value
         self._save()
 
+    def __iter__(self):
+        return self._data.__iter__()
+
+    def iterkeys(self):
+        return self._data.__iter__()
+
+    def items(self):
+        return self._data.items()
+
     @property
     def path(self):
         return self._path
