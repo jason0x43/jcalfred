@@ -28,13 +28,14 @@ class Item(object):
 
     '''An item in an Alfred feedback XML message'''
     def __init__(self, title, subtitle=None, icon=None, valid=False, arg=None,
-                 uid=None, random_uid=True):
+                 uid=None, random_uid=True, autocomplete=None):
         self.title = title
         self.subtitle = subtitle
         self.icon = icon if icon is not None else 'icon.png'
         self.uid = uid
         self.valid = valid
         self.arg = arg
+        self.autocomplete = autocomplete
 
         if not uid and random_uid:
             self.uid = str(uuid.uuid4())
@@ -57,6 +58,9 @@ class Item(object):
             item.set('valid', 'yes')
         else:
             item.set('valid', 'no')
+
+        if self.autocomplete:
+            item.set('autocomplete', self.autocomplete)
 
         if self.arg is not None:
             item.set('arg', self.arg)
@@ -121,13 +125,26 @@ class WorkflowInfo(object):
         self.readme = self.bundle['readme']
         self.config_file = os.path.join(self.data_dir, 'config.json')
         self.update_file = os.path.join(path, 'update.json')
-        self._config = JsonFile(self.config_file)
+        self._config = None
 
     def __str__(self):
         return self.name
 
     @property
+    def id(self):
+        if not hasattr(self, '_id'):
+            from os.path import basename
+            self._id = basename(self.path).split('.')[2]
+        return self._id
+
+    @property
     def config(self):
+        if not self._config:
+            try:
+                self._config = JsonFile(self.config_file)
+            except ValueError:
+                self._config = {}
+                LOG.error('Error loading config file')
         return self._config
 
     @property
@@ -173,7 +190,7 @@ class Workflow(object):
 
     @property
     def log_level(self):
-        return self.config.get('log_level', 'INFO')
+        return self.config.get('loglevel', 'INFO')
 
     @property
     def log_file(self):
@@ -228,9 +245,13 @@ class Workflow(object):
                     return False
         return True
 
-    def fuzzy_match_list(self, test, items, key=None, words=False,
-                         ordered=True):
-        '''Return the subset of items that fuzzy match a string [test]'''
+    def partial_match(self, test, text, words=False, ordered=True):
+        '''Return true if the given text partially matches the test'''
+        return text.lower().startswith(test.lower())
+
+    def match_list(self, test, items, matcher, key=None, words=False,
+                   ordered=True):
+        '''Return the subset of items that match a string [test]'''
         matches = []
         for item in items:
             if key:
@@ -238,9 +259,21 @@ class Workflow(object):
             else:
                 istr = str(item)
 
-            if self.fuzzy_match(test, istr, words=words, ordered=ordered):
+            if matcher(test, istr, words=words, ordered=ordered):
                 matches.append(item)
         return matches
+
+    def fuzzy_match_list(self, test, items, key=None, words=False,
+                         ordered=True):
+        '''Return the subset of items that fuzzy match a string [test]'''
+        return self.match_list(test, items, self.fuzzy_match, key, words,
+                               ordered)
+
+    def partial_match_list(self, test, items, key=None, words=False,
+                           ordered=True):
+        '''Return the subset of items that partially match a string [test]'''
+        return self.match_list(test, items, self.partial_match, key, words,
+                               ordered)
 
     def to_xml(self, items):
         '''Convert a list of Items to an Alfred XML feedback message'''
