@@ -166,6 +166,24 @@ class WorkflowInfo(object):
         return self._cache_dir
 
 
+class Command(object):
+    def __init__(self, command, text):
+        self.command = command
+        self.text = text
+
+    def to_item(self, parent=None):
+        ac = parent + ' ' if parent else ''
+        ac += self.command
+        return Item(self.command, autocomplete=ac, subtitle=self.text)
+
+
+class Menu(Command):
+    def to_item(self, parent=None):
+        item = super(Menu, self).to_item(parent)
+        item.autocomplete += ' '
+        return item
+
+
 class Workflow(object):
     def __init__(self):
         self._info = WorkflowInfo()
@@ -221,6 +239,27 @@ class Workflow(object):
         '''Output a string.'''
         from sys import stdout
         stdout.write(msg.encode('utf-8'))
+
+    def menu(self, structure, query, parent=None):
+        '''Manage a structured menu'''
+        query = query.strip()
+        items = []
+
+        for entry in structure:
+            items.append(entry.to_item(parent))
+
+        names = [i.title for i in items]
+
+        if len(query) > 0:
+            for name in names:
+                if query.startswith(name):
+                    query = query[len(name):]
+                    return getattr(self, 'tell_' + name)(query)
+
+            items = self.partial_match_list(query, items,
+                key=lambda t: t.title)
+
+        return items
 
     def fuzzy_match(self, test, text, words=False, ordered=True):
         '''Return true if the given text fuzzy matches the test'''
