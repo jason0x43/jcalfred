@@ -6,7 +6,7 @@ import plistlib
 import os.path
 import json
 import uuid
-from jsonfile import JsonFile
+from .jsonfile import JsonFile
 from logging import handlers
 from xml.etree.ElementTree import Element, SubElement, tostring
 
@@ -27,6 +27,7 @@ class Item(object):
     LINE = unichr(0x2500) * 20
 
     '''An item in an Alfred feedback XML message'''
+
     def __init__(self, title, subtitle=None, icon=None, valid=False, arg=None,
                  uid=None, random_uid=True, autocomplete=None):
         self.title = title
@@ -105,6 +106,7 @@ class Item(object):
 
 
 class WorkflowInfo(object):
+
     def __init__(self, path=None):
         if not path:
             path = os.getcwd()
@@ -167,6 +169,7 @@ class WorkflowInfo(object):
 
 
 class Command(object):
+
     def __init__(self, command, text):
         self.command = command
         self.text = text
@@ -178,6 +181,7 @@ class Command(object):
 
 
 class Menu(Command):
+
     def to_item(self, parent=None):
         item = super(Menu, self).to_item(parent)
         item.autocomplete += ' '
@@ -185,6 +189,7 @@ class Menu(Command):
 
 
 class Workflow(object):
+
     def __init__(self):
         self._info = WorkflowInfo()
 
@@ -257,7 +262,7 @@ class Workflow(object):
                     return getattr(self, 'tell_' + name)(query)
 
             items = self.partial_match_list(query, items,
-                key=lambda t: t.title)
+                                            key=lambda t: t.title)
 
         return items
 
@@ -462,7 +467,7 @@ class Workflow(object):
                 items = getattr(self, cmd)(query)
             else:
                 items = [Item('Invalid action "%s"' % name)]
-        except Exception, e:
+        except Exception as e:
             LOG.exception('Error telling')
             items = [Item('Error: %s' % e)]
         self.puts(self.to_xml(items))
@@ -479,7 +484,7 @@ class Workflow(object):
                     doer(query)
             else:
                 self.puts('Invalid command "%s"' % name)
-        except Exception, e:
+        except Exception as e:
             LOG.exception('Error showing')
             self.puts('Error: %s' % e)
 
