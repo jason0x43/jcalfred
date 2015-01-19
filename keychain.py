@@ -5,8 +5,8 @@
 
 This script was inspired by Stever Webster's keychain.py (https://github.com/
 spjwebster/keychain.py), which was originally based on Stuart Colville's
-Keychain.py. It's has fewer features than either of the others, but I didn't
-really need to do much other than get and set passwords.
+Keychain.py. It has fewer features than either, but its goal is simply to get
+and set passwords.
 '''
 
 import sys
@@ -37,8 +37,12 @@ class Keychain(object):
 
     def _parse_keychain_item(self, lines):
         '''Parse a keychain item.'''
-        item = {'service': None, 'account': None, 'comment': None,
-                'password': None}
+        item = {
+            'service': None,
+            'account': None,
+            'comment': None,
+            'password': None
+        }
         for line in lines:
             if line.startswith('password: '):
                 ipass = line[10:].strip().strip('"')

@@ -7,7 +7,6 @@ import os.path
 import json
 import uuid
 from .jsonfile import JsonFile
-from logging import handlers
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 
@@ -23,19 +22,28 @@ def _check_dir_writeable(path):
             raise IOError('No write access to %s' % path)
 
 
+def _run_script(script):
+    from subprocess import Popen, PIPE
+    p = Popen(['osascript', '-ss', '-'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    LOG.debug('communicating {0}'.format(script))
+    stdout, stderr = p.communicate(script)
+    return stdout.decode('utf-8'), stderr.decode('utf-8')
+
+
 class Item(object):
     LINE = unichr(0x2500) * 20
 
     '''An item in an Alfred feedback XML message'''
 
     def __init__(self, title, subtitle=None, icon=None, valid=False, arg=None,
-                 uid=None, random_uid=True, autocomplete=None):
+                 uid=None, random_uid=False, autocomplete=None, prefix=None):
         self.title = title
         self.subtitle = subtitle
         self.icon = icon if icon is not None else 'icon.png'
         self.uid = uid
         self.valid = valid
         self.arg = arg
+        self.prefix = prefix
         self.autocomplete = autocomplete
 
         if not uid and random_uid:
@@ -53,7 +61,8 @@ class Item(object):
     def to_xml(self):
         item = Element('item')
 
-        item.set('uid', self.uid)
+        if self.uid:
+            item.set('uid', self.uid)
 
         if self.valid:
             item.set('valid', 'yes')
@@ -61,7 +70,10 @@ class Item(object):
             item.set('valid', 'no')
 
         if self.autocomplete:
-            item.set('autocomplete', self.autocomplete)
+            ac = self.autocomplete
+            if self.prefix:
+                ac = self.prefix + ' ' + ac
+            item.set('autocomplete', ac)
 
         if self.arg is not None:
             item.set('arg', self.arg)
@@ -106,7 +118,6 @@ class Item(object):
 
 
 class WorkflowInfo(object):
-
     def __init__(self, path=None):
         if not path:
             path = os.getcwd()
@@ -168,24 +179,35 @@ class WorkflowInfo(object):
         return self._cache_dir
 
 
-class Command(object):
-
+class MenuItem(object):
     def __init__(self, command, text):
         self.command = command
         self.text = text
 
-    def to_item(self, parent=None):
-        ac = parent + ' ' if parent else ''
-        ac += self.command
+    def to_item(self, prefix=None):
+        ac = prefix + ' ' if prefix else ''
+        ac += self.command + ' '
         return Item(self.command, autocomplete=ac, subtitle=self.text)
 
 
-class Menu(Command):
+class Command(MenuItem):
+    pass
 
-    def to_item(self, parent=None):
-        item = super(Menu, self).to_item(parent)
-        item.autocomplete += ' '
+
+class Keyword(MenuItem):
+    def __init__(self, command, text, arg=None):
+        super(Keyword, self).__init__(command, text)
+        self.arg = arg if arg else command
+
+    def to_item(self, prefix=None):
+        item = super(Keyword, self).to_item(prefix)
+        item.arg = self.arg
+        item.valid = True
         return item
+
+
+class Menu(Command):
+    pass
 
 
 class Workflow(object):
@@ -196,9 +218,7 @@ class Workflow(object):
         _check_dir_writeable(self.data_dir)
         _check_dir_writeable(self.cache_dir)
 
-        self._log_file = os.path.join(self.cache_dir, 'debug.log')
-        handler = handlers.TimedRotatingFileHandler(
-            self._log_file, when='H', interval=1, backupCount=1)
+        handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter(LOG_FORMAT))
         logging.getLogger().addHandler(handler)
         logging.getLogger().setLevel(getattr(logging, self.log_level))
@@ -213,11 +233,7 @@ class Workflow(object):
 
     @property
     def log_level(self):
-        return self.config.get('loglevel', 'INFO')
-
-    @property
-    def log_file(self):
-        return self._log_file
+        return self.config.get('loglevel', 'DEBUG')
 
     @log_level.setter
     def log_level(self, level):
@@ -245,24 +261,43 @@ class Workflow(object):
         from sys import stdout
         stdout.write(msg.encode('utf-8'))
 
-    def menu(self, structure, query, parent=None):
+    def menu(self, structure, query, prefix=None):
         '''Manage a structured menu'''
-        query = query.strip()
+        query = query.lstrip()
         items = []
 
-        for entry in structure:
-            items.append(entry.to_item(parent))
+        LOG.debug('menu with query "%s" and prefix %s', query, prefix)
 
-        names = [i.title for i in items]
+        for entry in structure:
+            items.append(entry.to_item(prefix))
 
         if len(query) > 0:
-            for name in names:
-                if query.startswith(name):
-                    query = query[len(name):]
-                    return getattr(self, 'tell_' + name)(query)
+            if ' ' in query:
+                command, sep, args = query.partition(' ')
 
-            items = self.partial_match_list(query, items,
-                                            key=lambda t: t.title)
+                # query contains a space, so look for an exact match for the
+                # command word
+                items = self.match_list(command, items, key=lambda t: t.title)
+                if len(items) > 1:
+                    items = [Item('Multiple commands match "{0}"'.format(
+                                  command))]
+                elif len(items) == 1:
+                    item = items[0]
+                    if not item.arg:
+                        # the item doesn't have an argument, # so it must be a
+                        # filter entry
+                        return getattr(self, 'tell_' + command)(args.lstrip(),
+                                                                prefix=command)
+                    elif len(args.strip()) > 0:
+                        items = [Item('"{0}" command doesn\'t take '
+                                      'arguments'.format(command))]
+            else:
+                # query doesn't end with a space, so find anything that matches
+                items = self.partial_match_list(query, items,
+                                                key=lambda t: t.title)
+
+        if len(items) == 0:
+            items.append(Item('No commands match "{0}"'.format(query)))
 
         return items
 
@@ -293,7 +328,7 @@ class Workflow(object):
         '''Return true if the given text partially matches the test'''
         return text.lower().startswith(test.lower())
 
-    def match_list(self, test, items, matcher, key=None, words=False,
+    def match_list(self, test, items, matcher=None, key=None, words=False,
                    ordered=True):
         '''Return the subset of items that match a string [test]'''
         matches = []
@@ -303,7 +338,12 @@ class Workflow(object):
             else:
                 istr = str(item)
 
-            if matcher(test, istr, words=words, ordered=ordered):
+            is_match = False
+            if matcher:
+                is_match = matcher(test, istr, words=words, ordered=ordered)
+            else:
+                is_match = test == istr
+            if is_match:
                 matches.append(item)
         return matches
 
@@ -331,11 +371,7 @@ class Workflow(object):
 
     def run_script(self, script):
         '''Run an AppleScript, returning its output'''
-        from subprocess import Popen, PIPE
-        p = Popen(['osascript', '-ss', '-'], stdin=PIPE, stdout=PIPE,
-                  stderr=PIPE)
-        stdout, stderr = p.communicate(script)
-        return stdout.decode('utf-8'), stderr.decode('utf-8')
+        return _run_script(script)
 
     def show_log(self):
         '''Open the debug log in the system default viewer'''
@@ -382,15 +418,14 @@ class Workflow(object):
               end tell
             end run'''.format(v=value, p=prompt, t=title, h=hidden, b=buttons)
 
-        from subprocess import Popen, PIPE
-        p = Popen(['osascript', '-'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = p.communicate(script)
-        response = stdout.decode('utf-8').rstrip('\n')
+        stdout, stderr = self.run_script(script)
+        response = stdout.rstrip('\n')
         button, sep, value = response.partition('|')
         return (button, value)
 
     @classmethod
-    def get_selection_from_user(cls, title, prompt, choices, default=None):
+    def get_selection_from_user(cls, title, prompt, choices, default=None,
+                                multiple=False):
         '''Popup a dialog to let a user select a value from a list of choices.
 
         The main use for this function is to request information that you don't
@@ -403,41 +438,32 @@ class Workflow(object):
             choices = [choices]
         choices = '{{"{0}"}}'.format('","'.join(choices))
 
+        if multiple:
+            multiple = 'with'
+        else:
+            multiple = 'without'
+
         with open(os.path.join(BASE_DIR, 'get_selection.scpt')) as sfile:
             script = sfile.read().format(default=default, prompt=prompt,
-                                         title=title, choices=choices)
-        from subprocess import Popen, PIPE
-        p = Popen(['osascript', '-'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = p.communicate(script)
-        response = stdout.decode('utf-8').rstrip('\n')
+                                         title=title, choices=choices,
+                                         multiple=multiple)
+        stdout, stderr = _run_script(script)
+        LOG.debug('stdout: %s', stdout)
+        LOG.debug('stderr: %s', stderr)
+        response = stdout.rstrip('\n').strip('"')
         button, sep, value = response.partition('|')
-        return (button, value)
+        if button == 'Cancel':
+            return None
+        return value
 
     def get_confirmation(self, title, prompt, default='No'):
         '''Display a confirmation dialog'''
-        script = '''
-            on run argv
-              tell application "Alfred 2"
-                  activate
-                  set alfredPath to (path to application "Alfred 2")
-                  set alfredIcon to path to resource "appicon.icns" in bundle ¬
-                    (alfredPath as alias)
-
-                  try
-                    display dialog "{p}" with title "{t}"  ¬
-                      buttons {{"Yes", "No"}} default button "{d}" ¬
-                      with icon alfredIcon
-                    set answer to (button returned of result)
-                  on error number -128
-                    set answer to "No"
-                  end
-              end tell
-            end run'''.format(p=prompt, t=title, d=default)
-
-        from subprocess import Popen, PIPE
-        p = Popen(['osascript', '-'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = p.communicate(script)
-        return stdout.decode('utf-8').rstrip('\n')
+        with open(os.path.join(BASE_DIR, 'get_confirmation.scpt')) as sfile:
+            script = sfile.read().format(p=prompt, t=title, d=default)
+        stdout, stderr = _run_script(script)
+        if len(stderr) > 0:
+            raise Exception(stderr)
+        return stdout.rstrip('\n').strip('"')
 
     def show_message(self, title, message):
         '''Display a message dialog'''
@@ -454,9 +480,7 @@ class Workflow(object):
               end tell
             end run'''.format(t=title, m=message)
 
-        from subprocess import Popen, PIPE
-        p = Popen(['osascript', '-'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        p.communicate(script)
+        return self.run_script(script)
 
     def tell(self, name, query=''):
         '''Tell something.'''

@@ -51,7 +51,7 @@ class JsonFile(object):
         return key in self._data
 
     def __getitem__(self, key):
-        return self._data[key]
+        return self._data.get(key, None)
 
     def __delitem__(self, key):
         del self._data[key]
